@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "isProcessed": false,
+      "actionType": "BEND"
+    },
+    {
+      "isProcessed": false,
+      "actionType": "CUT"
+    }
+  ]
+}
