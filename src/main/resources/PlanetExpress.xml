@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:si="http://www.springframework.org/schema/integration"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/integration
+       http://www.springframework.org/schema/integration/spring-integration.xsd">
+
+    <!-- Declare global poller -->
+    <si:poller fixed-delay="2000" id="defaultPoller" default="true" />
+
+    <!-- Declare channel for incoming orders -->
+    <si:channel id="professorQueue">
+        <si:queue capacity="20" />
+    </si:channel>
+
+    <!-- Declare incoming messages gateway, it receives all message and starts processing -->
+    <si:gateway
+            service-interface="com.epam.techtalk.spring.integration.planet.express.app.xml.common.PlanetExpress"
+            default-request-channel="professorQueue">
+        <si:method name="placeOrder" />
+    </si:gateway>
+
+    <!-- Step 1: Split incoming messages into the collection of items -->
+    <si:channel id="hermesQueue">
+        <si:queue capacity="20" />
+    </si:channel>
+
+    <si:splitter input-channel="professorQueue"
+                 output-channel="hermesQueue"
+                 expression="payload.items">
+    </si:splitter>
+
+    <!-- Step 2: Route messages based on operation type -->
+    <si:channel id="zoidbergQueue">
+        <si:queue capacity="20" />
+    </si:channel>
+
+    <si:channel id="benderQueue">
+        <si:queue capacity="20" />
+    </si:channel>
+
+    <si:recipient-list-router input-channel="hermesQueue">
+        <si:recipient channel="benderQueue"
+                      selector-expression="payload.actionType.name().equals('CUT')" />
+        <si:recipient channel="zoidbergQueue"
+                      selector-expression="payload.actionType.name().equals('BEND')" />
+    </si:recipient-list-router>
+
+    <!-- Step 3: Process messages -->
+    <si:channel id="fryQueue">
+        <si:queue capacity="20" />
+    </si:channel>
+
+    <bean id="orderItemProcessor"
+          class="com.epam.techtalk.spring.integration.planet.express.app.xml.common.ProcessingHandler" />
+
+    <si:service-activator input-channel="benderQueue"
+                          ref="orderItemProcessor"
+                          method="process"
+                          output-channel="fryQueue" />
+
+    <si:service-activator input-channel="zoidbergQueue"
+                          ref="orderItemProcessor"
+                          method="process"
+                          output-channel="fryQueue" />
+
+    <!-- Step 4: Aggregate messages -->
+    <si:channel id="leelaQueue">
+        <si:queue capacity="20" />
+    </si:channel>
+
+    <bean id="deliveryAggregator"
+          class="com.epam.techtalk.spring.integration.planet.express.app.xml.common.DeliveryAggregator"/>
+
+    <si:aggregator ref="deliveryAggregator"
+                   method="aggregate"
+                   input-channel="fryQueue"
+                   output-channel="leelaQueue">
+        <si:poller ref="defaultPoller" />
+    </si:aggregator>
+
+    <!-- Step 5: Finish execution -->
+    <si:service-activator input-channel="leelaQueue"
+                          method="consume">
+        <bean
+                class="com.epam.techtalk.spring.integration.planet.express.app.xml.common.FinalConsumer" />
+    </si:service-activator>
+</beans>
